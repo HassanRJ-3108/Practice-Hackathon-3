@@ -8,19 +8,61 @@ import { allProductsQuery } from '@/sanity/lib/queries';
 import { Product } from '@/types/product';
 import { urlFor } from '@/sanity/lib/image';
 import Link from 'next/link';
-import { addToCart } from '@/app/actions/actions';
+import { addToCart, addToWishlist, getWishlistItems, removeFromWishlist } from '@/app/actions/actions';
+import toast from 'react-hot-toast';
 
 export default function ExploreProducts() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [wishlist, setWishlist] = useState<Product[]>([]);
+  const [showMoreVisible, setShowMoreVisible] = useState(true);
 
   useEffect(() => {
     async function fetchProducts() {
       const products: Product[] = await client.fetch(allProductsQuery);
-      setProducts(products.slice(0, 8)); // Get only 8 products
+      setAllProducts(products);
+      setDisplayedProducts(products.slice(0, 8));
+      setShowMoreVisible(products.length > 8);
     }
 
     fetchProducts();
+    setWishlist(getWishlistItems());
   }, []);
+
+  const handleAddToCart = (e: React.MouseEvent, product: Product) => {
+    e.preventDefault(); // Prevent default link behavior
+    toast.success(`${product.name} added to cart!`);
+    addToCart(product);
+  };
+
+  const handleAddToWishlist = (e: React.MouseEvent, product: Product) => {
+    e.preventDefault(); // Prevent default link behavior
+    const isInWishlist = wishlist.find(item => item._id === product._id);
+
+    if (isInWishlist) {
+      removeFromWishlist(product._id);
+      toast.success(`${product.name} removed from wishlist!`);
+      setWishlist(wishlist.filter(item => item._id !== product._id));
+    } else {
+      addToWishlist(product);
+      toast.success(`${product.name} added to wishlist!`);
+      setWishlist([...wishlist, product]);
+    }
+  };
+
+  const isProductInWishlist = (productId: string) => {
+    return wishlist.some(item => item._id === productId);
+  };
+
+  const loadMoreProducts = () => {
+    const currentLength = displayedProducts.length;
+    const nextProducts = allProducts.slice(currentLength, currentLength + 8);
+    setDisplayedProducts([...displayedProducts, ...nextProducts]);
+    
+    if (displayedProducts.length + nextProducts.length >= allProducts.length) {
+      setShowMoreVisible(false);
+    }
+  };
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
@@ -48,7 +90,7 @@ export default function ExploreProducts() {
 
         {/* Products Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-[30px]">
-          {products.map((product) => (
+          {displayedProducts.map((product) => (
             <div key={product._id} className="group bg-white rounded-[4px]">
               <Link href={`/product/${product.slug.current}`} legacyBehavior>
                 <a>
@@ -61,10 +103,19 @@ export default function ExploreProducts() {
                       </div>
                     )}
                     <div className="absolute top-2 sm:top-3 right-2 sm:right-3 z-10 flex flex-col gap-2">
-                      <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className={`h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white ${isProductInWishlist(product._id) ? 'text-red-500' : ''}`} 
+                        onClick={(e) => handleAddToWishlist(e, product)}
+                      >
                         <Heart className="h-4 w-4 sm:h-5 sm:w-5" />
                       </Button>
-                      <Button variant="outline" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white"
+                      >
                         <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                       </Button>
                     </div>
@@ -78,7 +129,10 @@ export default function ExploreProducts() {
                       />
                     )}
                     <div className="absolute inset-x-0 bottom-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pb-2 sm:pb-3">
-                      <Button className="bg-black text-white hover:bg-black/90 h-8 sm:h-10 rounded-[4px] text-sm sm:text-base font-medium px-3 sm:px-4" onClick={() => addToCart(product)}>
+                      <Button 
+                        className="bg-black text-white hover:bg-black/90 h-8 sm:h-10 rounded-[4px] text-sm sm:text-base font-medium px-3 sm:px-4" 
+                        onClick={(e) => handleAddToCart(e, product)}
+                      >
                         Add To Cart
                       </Button>
                     </div>
@@ -112,13 +166,19 @@ export default function ExploreProducts() {
           ))}
         </div>
 
-        {/* View All Button */}
-        <div className="flex justify-center mt-6 sm:mt-10">
-          <Button className="bg-[#DB4444] hover:bg-[#DB4444]/90 text-white h-10 sm:h-12 px-8 sm:px-12 rounded-[4px] text-sm sm:text-base font-medium">
-            View All Products
-          </Button>
-        </div>
+        {/* Show More Products Button */}
+        {showMoreVisible && (
+          <div className="flex justify-center mt-6 sm:mt-10">
+            <Button 
+              className="bg-[#DB4444] hover:bg-[#DB4444]/90 text-white h-10 sm:h-12 px-8 sm:px-12 rounded-[4px] text-sm sm:text-base font-medium"
+              onClick={loadMoreProducts}
+            >
+              Show More Products
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );
 }
+
